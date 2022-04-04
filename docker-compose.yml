@@ -1,0 +1,77 @@
+version: '3.4'
+
+services:
+  fleetmanagement.api:
+    image: ${DOCKER_REGISTRY-}fleetmanagementapi
+    build:
+      context: .
+      dockerfile: src/FleetManagement.Api/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+;http://+
+    ports:
+      - "8080:80"
+      - "8081:443"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets
+      - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
+    depends_on:
+     - sqldb
+     - migrations 
+
+  sqldb:
+   container_name: sqldb
+   image: mcr.microsoft.com/mssql/server:2017-latest-ubuntu
+   environment:
+    ACCEPT_EULA: "Y"
+    SA_PASSWORD: "qaz!0qaz"
+    MSSQL_PID: Express
+   ports:
+     - "1433:1433"
+   depends_on: 
+     - migrations
+
+  migrations:
+    build: 
+      context: .
+      dockerfile: src/FleetManagement.Api/Migrations.Dockerfile
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.9.2
+    container_name: es01
+    environment:
+    - xpack.monitoring.enabled=true
+    - xpack.watcher.enabled=false
+    - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    - discovery.type=single-node
+    ulimits:
+     memlock:
+      soft: -1
+      hard: -1
+    volumes:
+     - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+     - 9200:9200
+    networks:
+     - elastic
+  
+  kib01:
+   container_name: kib01
+   image: docker.elastic.co/kibana/kibana:7.9.2
+   ports:
+    - 5601:5601
+   environment:
+     ELASTICSEARCH_URL: http://es01:9200
+     ELASTICSEARCH_HOSTS: http://es01:9200
+   networks:
+    - elastic
+
+volumes:
+  mssql-server-linux-data:
+  elasticsearch-data:
+  data01:
+   driver: local
+
+networks:
+  elastic:
+    driver: bridge
